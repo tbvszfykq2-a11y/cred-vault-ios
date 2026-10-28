@@ -18,6 +18,9 @@ targets:
     platform: iOS
     sources:
       - path: Sources/CredVault
+    dependencies:
+      - sdk: LocalAuthentication.framework
+      - sdk: Security.framework
     info:
       path: Info.plist
       properties:
@@ -34,6 +37,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Cred Vault connects to your vault server over the WireGuard tunnel on your private network.
+        NSFaceIDUsageDescription: Face ID unlocks your saved vault passcode so you do not have to retype it.
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

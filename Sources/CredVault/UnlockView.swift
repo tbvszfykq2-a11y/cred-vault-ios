@@ -4,9 +4,32 @@ struct UnlockView: View {
     @EnvironmentObject private var app: AppState
     @State private var passcode = ""
     @State private var showSettings = false
+    @State private var rememberWithBiometrics = false
+    @State private var autoPrompted = false
+
+    private var canUseBiometrics: Bool {
+        app.biometricsAvailable && app.biometricsEnrolled
+    }
 
     var body: some View {
         Form {
+            if canUseBiometrics {
+                Section {
+                    Button {
+                        Task { _ = await app.unlockWithBiometrics() }
+                    } label: {
+                        Label("Unlock with \(app.biometryLabel)", systemImage: "faceid")
+                    }
+                    .disabled(app.busy || app.isLockedOut)
+                } footer: {
+                    if app.isLockedOut {
+                        Text("Biometric unlock is paused while the server is locked out.")
+                    } else {
+                        Text("Reads your saved passcode from the Keychain. \(app.biometryLabel) is required each time.")
+                    }
+                }
+            }
+
             Section {
                 SecureField("Passcode", text: $passcode)
                     .textInputAutocapitalization(.never)
@@ -15,14 +38,22 @@ struct UnlockView: View {
             } header: {
                 Text("Unlock vault")
             } footer: {
-                Text("Your passcode is sent to your server to derive the decryption key. It is never stored on this device.")
+                Text("Your passcode is sent to your server to derive the decryption key. It is only kept on this device if you enable biometric unlock below.")
             }
 
             Section {
                 Button {
                     let value = passcode
+                    let remember = rememberWithBiometrics
                     Task {
-                        _ = await app.unlock(passcode: value)
+                        let ok = await app.unlock(passcode: value)
+                        if ok {
+                            if remember {
+                                app.rememberPasscode(value)
+                            } else if app.biometricsEnrolled {
+                                app.forgetPasscode()
+                            }
+                        }
                         passcode = ""
                     }
                 } label: {
@@ -32,6 +63,14 @@ struct UnlockView: View {
                     }
                 }
                 .disabled(passcode.isEmpty || app.busy || app.isLockedOut)
+
+                if app.biometricsAvailable {
+                    Toggle("Remember with \(app.biometryLabel)", isOn: $rememberWithBiometrics)
+                }
+            } footer: {
+                if app.biometricsAvailable {
+                    Text("Stores the passcode in a Keychain item that only unlocks with \(app.biometryLabel). Changing your enrolled face or fingerprint invalidates it automatically.")
+                }
             }
 
             Section {
@@ -64,6 +103,15 @@ struct UnlockView: View {
             Button("OK") { app.errorMessage = nil }
         } message: {
             Text(app.errorMessage ?? "")
+        }
+        .task {
+            // Offer biometric unlock once per launch, but never while locked out.
+            guard !autoPrompted, canUseBiometrics, !app.isLockedOut else { return }
+            autoPrompted = true
+            _ = await app.unlockWithBiometrics()
+        }
+        .onAppear {
+            rememberWithBiometrics = app.biometricsEnrolled
         }
     }
 

@@ -8,7 +8,13 @@ directly over the WireGuard tunnel.
 ## What it does
 
 - **Unlock** with the vault passcode. The passcode is sent to the server, which derives
-  the AES-256-GCM key. The app never stores it and never keeps a derived key.
+  the AES-256-GCM key. The app never keeps a derived key.
+- **Face ID / Touch ID unlock** (optional). Switch on "Remember with Face ID" while typing the
+  passcode and it is stored in a Keychain item gated by `biometryCurrentSet` — reading it
+  triggers the biometric prompt. The item is invalidated automatically if the enrolled
+  face/finger set changes. If the server rejects the saved passcode (for example after a
+  passcode change made elsewhere), the app deletes the stale item rather than retrying and
+  burning one of the five attempts before the global lockout.
 - **Browse** credentials with search across service, username, URL, notes and tags, plus a
   VPS / External category filter.
 - **Reveal** a password on demand, or copy it to the clipboard with a 60-second expiry.
@@ -23,7 +29,8 @@ directly over the WireGuard tunnel.
 
 | Concern | Handling |
 |---|---|
-| Passcode at rest | Never stored on the device. Sent once per unlock. |
+| Passcode at rest | Not stored by default. Optionally kept in a Keychain item requiring biometry to read. |
+| Face ID gating | `SecAccessControlCreateWithFlags(.biometryCurrentSet)`; no device-passcode fallback. |
 | Session | HttpOnly `cv_session` cookie in URLSession's shared cookie storage. |
 | CSRF | Every mutating POST sends `X-CSRF-Token` from `GET /api/state`. |
 | Lockout | Server-side, global, file-backed. The UI shows the countdown and disables unlock. |

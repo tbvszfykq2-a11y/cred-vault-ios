@@ -23,6 +23,13 @@ final class AppState: ObservableObject {
     @Published var busy = false
     @Published var errorMessage: String?
     @Published var didLoad = false
+    /// HTTP status of the last failure, so callers can tell "wrong passcode" (401)
+    /// from a transport error without string-matching the message.
+    @Published var lastErrorStatus: Int?
+
+    var biometricsAvailable: Bool { BiometricStore.isAvailable }
+    var biometricsEnrolled: Bool { BiometricStore.hasStoredPasscode }
+    var biometryLabel: String { BiometricStore.biometryLabel }
 
     private var cached: (base: String, api: VaultAPI)?
 
@@ -89,6 +96,41 @@ final class AppState: ObservableObject {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    /// Reads the passcode from the biometric Keychain item (this is what shows the
+    /// Face ID prompt) and unlocks with it. If the server rejects the saved passcode,
+    /// the stale item is deleted so it cannot burn attempts and trip the global lockout.
+    func unlockWithBiometrics() async -> Bool {
+        lastErrorStatus = nil
+        do {
+            let saved = try await BiometricStore.loadAsync()
+            let ok = await unlock(passcode: saved)
+            if !ok, lastErrorStatus == 401 {
+                BiometricStore.delete()
+                errorMessage = "The saved Face ID passcode no longer works. It has been removed — type the passcode to unlock."
+            }
+            return ok
+        } catch let e as BiometricStoreError {
+            errorMessage = e.errorDescription
+            return false
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Store the passcode for Face ID unlock. Called only where the user just typed it.
+    func rememberPasscode(_ passcode: String) {
+        do {
+            try BiometricStore.save(passcode)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func forgetPasscode() {
+        BiometricStore.delete()
     }
 
     func lock() async {
@@ -206,6 +248,7 @@ final class AppState: ObservableObject {
 
     private func handle(_ e: APIError) {
         errorMessage = e.message
+        lastErrorStatus = e.status
         if let locked = e.lockedFor, locked > 0 {
             lockedUntil = Date().addingTimeInterval(TimeInterval(locked))
             authed = false
