@@ -92,7 +92,9 @@ final class AppState: ObservableObject {
     }
 
     func lock() async {
-        await client().logout()
+        if let api = try? client() {
+            await api.logout()
+        }
         authed = false
         csrf = ""
         entries = []
