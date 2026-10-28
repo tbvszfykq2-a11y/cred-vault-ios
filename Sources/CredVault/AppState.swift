@@ -27,9 +27,11 @@ final class AppState: ObservableObject {
     /// from a transport error without string-matching the message.
     @Published var lastErrorStatus: Int?
 
-    var biometricsAvailable: Bool { BiometricStore.isAvailable }
-    var biometricsEnrolled: Bool { BiometricStore.hasStoredPasscode }
-    var biometryLabel: String { BiometricStore.biometryLabel }
+    /// Cached rather than computed: the unlock screen re-renders once a second while a
+    /// lockout countdown runs, and each of these touches LAContext or the Keychain.
+    @Published var biometricsAvailable: Bool = BiometricStore.isAvailable
+    @Published var biometricsEnrolled: Bool = BiometricStore.hasStoredPasscode
+    let biometryLabel: String = BiometricStore.biometryLabel
 
     private var cached: (base: String, api: VaultAPI)?
 
@@ -108,6 +110,7 @@ final class AppState: ObservableObject {
             let ok = await unlock(passcode: saved)
             if !ok, lastErrorStatus == 401 {
                 BiometricStore.delete()
+                biometricsEnrolled = false
                 errorMessage = "The saved Face ID passcode no longer works. It has been removed — type the passcode to unlock."
             }
             return ok
@@ -124,13 +127,16 @@ final class AppState: ObservableObject {
     func rememberPasscode(_ passcode: String) {
         do {
             try BiometricStore.save(passcode)
+            biometricsEnrolled = true
         } catch {
             errorMessage = error.localizedDescription
+            biometricsEnrolled = BiometricStore.hasStoredPasscode
         }
     }
 
     func forgetPasscode() {
         BiometricStore.delete()
+        biometricsEnrolled = false
     }
 
     func lock() async {
