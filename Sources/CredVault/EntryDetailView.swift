@@ -85,7 +85,11 @@ struct EntryDetailView: View {
                     }
                 }
                 Button {
-                    Task { await loadPassword() }
+                    Task {
+                        if let fetched = await fetchPassword() {
+                            copy(fetched, label: "Password copied")
+                        }
+                    }
                 } label: {
                     Label("Copy password", systemImage: "key.horizontal")
                 }
@@ -139,13 +143,20 @@ struct EntryDetailView: View {
         }
     }
 
-    private func loadPassword() async {
+    /// Fetches (once) and returns the plaintext secret, revealing it in the UI.
+    @discardableResult
+    private func fetchPassword() async -> String? {
+        if let password { return password }
         loading = true
         defer { loading = false }
-        if let fetched = await app.reveal(id: current.id) {
-            password = fetched
-            revealed = true
-        }
+        guard let fetched = await app.reveal(id: current.id) else { return nil }
+        password = fetched
+        revealed = true
+        return fetched
+    }
+
+    private func loadPassword() async {
+        _ = await fetchPassword()
     }
 
     private func copy(_ value: String, label: String) {
