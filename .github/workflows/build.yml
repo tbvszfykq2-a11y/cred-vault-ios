@@ -1,0 +1,19 @@
+name: Build IPA
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  ipa:
+    uses: Jeho974/ipa-build-template/.github/workflows/build-unsigned-ipa.yml@main
+    permissions:
+      contents: write
+    with:
+      kind: xcodegen
+      project_dir: .
+      app_name: CredVault
+      bundle_id: com.hermes.credvault
